@@ -3,7 +3,6 @@
 /**
  * Nigerian places
  *
- * @author   Kingsley Ochu <ochu.kc@gmail.com>
  * @version  1.0.0
  * @license http://opensource.org/licenses/gpl-license.php GNU Public License
  * Credits: https://donjajo.com/ngstateslga-nigerian-36-states-local-government-areas-php-class/
@@ -51,7 +50,6 @@ $places['NG'] = array(
 	'EK' => array(
 			'Ilejemeje'
 		),
-	'EN' => array(
 	'GO' => array(
 			'Yamaltu/Delta'
 		),
@@ -107,54 +105,12 @@ $places['NG'] = array(
 			'Tai' 
 		),
 	'SK' => array(
-k			'Goronyo',
-			'Gudu',
-			'Gawabawa',
-			'Illela',
-			'Isa',
-			'Kware',
-			'kebbe',
-			'Rabah',
-			'Sabon birni',
-			'Shagari',
-			'Silame',
-			'Sokoto North',
-			'Sokoto South',
-			'Tambuwal',
-			'Tqngaza',
-			'Tureta',
-			'Wamako',
-			'Wurno',
 			'Yabo'
 		),
 	'TA' => array(
-			'Ardo-kola',
-			'Bali',
-			'Donga',
-			'Gashaka',
-			'Cassol',
-			'Ibi',
-			'Jalingo',
-			'Karin-Lamido',
-			'Kurmi',
-			'Lau',
-			'Sardauna',
-			'Takum',
-			'Ussa',
-			'Wukari',
-			'Yorro',
 			'Zing'
 		),
 	'YO' => array(
-l			'Fika',
-			'Jakusko',
-			'Karasuwa',
-			'Karawa',
-			'Machina',
-			'Nangere',
-			'Nguru Potiskum',
-			'Tarmua',
-			'Yunusari',
 			'Yusufari'
 		),
 	'ZA' => array(
