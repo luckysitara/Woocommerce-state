@@ -1,292 +1,154 @@
 <?php
 /**
- * Plugin Name: State and places for nigeria  Woocommerce
- * Description: Woocommerce plugin for listing states, cities, places, local government areas and towns in all countries of the world.
- * Version: 1.1.0
- * Author: chitez
- * Author URI: https://github.com/luckysitara
- * Developer: Bughacker
- * Developer URI: https://www.linkedin.com/in/bughacker001/
- * Text Domain: woocommerce-extension
- * License: GPLv2 or later
- * License URI: http://www.gnu.org/licenses/gpl-2.0.html
+ * Plugin Name: City Price
+ * Description: Adds custom states and cities for WooCommerce in Nigeria, with admin settings for city prices.
+ * Version: 1.0
+ * Author: Bughacker
  */
 
-/**
- * Die if accessed directly
- */
-defined( 'ABSPATH' ) or die( 'You can not access this file directly!' );
+if (!defined('ABSPATH')) {
+    exit; 
+}
 
-/**
- * Check if WooCommerce is active
- */
-if(in_array('woocommerce/woocommerce.php', apply_filters('active_plugins', get_option('active_plugins')))) {
+add_filter('woocommerce_states', 'custom_woocommerce_states');
+function custom_woocommerce_states($states) {
+    include_once 'states/NG.php';
+    return $states;
+}
 
-	class WC_States_Places {
+function include_places() {
+    include_once 'places/NG.php';
+}
+include_places();
 
-		const VERSION = '1.0.0';
-		private $states;
-		private $places;
+global $places;
 
-		/**
-		* Construct class
-		*/
-		public function __construct() {
-			 add_action( 'plugins_loaded', array( $this, 'init') );
-		}
+add_filter('woocommerce_default_address_fields', 'custom_override_default_address_fields');
+function custom_override_default_address_fields($address_fields) {
+    $address_fields['state']['required'] = true;
+    $address_fields['city']['required'] = true;
+    return $address_fields;
+}
 
-		/**
-		* WC init
-		*/
-		public function init() {
-			$this->init_states();
-			$this->	init_places();
-		}
+add_action('wp_enqueue_scripts', 'wc_enqueue_script');
+function wc_enqueue_script() {
+    wp_enqueue_script('wc-state-city', plugin_dir_url(__FILE__) . 'js/place-select.js', array('jquery', 'wc-country-select'), '1.0', true);
+    wp_localize_script('wc-state-city', 'wc_cities', get_cities());
+}
 
-		/**
-		* WC States init
-		*/
-		public function init_states() {
-			add_filter('woocommerce_states', array($this, 'wc_states'));
-		}
+function get_cities() {
+    global $places;
+    return $places;
+}
 
-		/**
-		* WC States init
-		*/
-		public function init_places() {
-			add_filter( 'woocommerce_billing_fields', array( $this, 'wc_billing_fields' ), 10, 2 );
-			add_filter( 'woocommerce_shipping_fields', array( $this, 'wc_shipping_fields' ), 10, 2 );
-			add_filter( 'woocommerce_form_field_city', array( $this, 'wc_form_field_city' ), 10, 4 );
+// Plugin activation hook
+register_activation_hook(__FILE__, 'wc_city_prices_plugin_activation');
+function wc_city_prices_plugin_activation() {
+    global $places;
 
-			add_action( 'wp_enqueue_scripts', array( $this, 'load_scripts' ) );
-		}
+    foreach ($places['NG'] as $state_code => $cities) {
+        foreach ($cities as $city) {
+            $price_key = 'wc_city_price_' . $state_code . '_' . sanitize_title($city);
+            if (get_option($price_key) === false) {
+                add_option($price_key, '');
+            }
+        }
+    }
+}
 
-		/**
-	    * Implement WC States
-	    * @param mixed $states
-	    * @return mixed
-	    */
-        public function  wc_states($states) {
-        	//get countries allowed by store owner
-            $allowed = $this->get_store_allowed_countries();
+// Add admin menu for City Prices
+add_action('admin_menu', 'wc_city_prices_admin_menu');
+function wc_city_prices_admin_menu() {
+    add_menu_page(
+        'City Prices',
+        'City Prices',
+        'manage_options',
+        'wc-city-prices',
+        'wc_city_prices_settings_page',
+        'dashicons-admin-generic',
+        56
+    );
+}
 
-            if (!empty( $allowed ) ) {
-                foreach ($allowed as $code => $country) {
-                    if (! isset( $states[$code] ) && file_exists($this->get_plugin_path() . '/states/' . $code . '.php')) {
-                        include($this->get_plugin_path() . '/states/' . $code . '.php');
-                    }
+function wc_city_prices_settings_page() {
+    global $places;
+
+    // Check if the form is submitted
+    if (isset($_POST['wc_city_prices_submit'])) {
+        // Save the prices
+        foreach ($places['NG'] as $state_code => $cities) {
+            foreach ($cities as $city) {
+                $price_key = 'wc_city_price_' . $state_code . '_' . sanitize_title($city);
+                update_option($price_key, sanitize_text_field($_POST[$price_key]));
+            }
+        }
+
+        echo '<div class="updated"><p>Prices saved successfully.</p></div>';
+    }
+
+    ?>
+    <div class="wrap">
+        <h1>City Prices</h1>
+        <form method="post" action="">
+            <?php
+            foreach ($places['NG'] as $state_code => $cities) {
+                echo '<h2>' . $state_code . '</h2>';
+                foreach ($cities as $city) {
+                    $price_key = 'wc_city_price_' . $state_code . '_' . sanitize_title($city);
+                    $price = get_option($price_key, '');
+                    ?>
+                    <p>
+                        <label for="<?php echo esc_attr($price_key); ?>"><?php echo esc_html($city); ?>:</label>
+                        <input type="text" name="<?php echo esc_attr($price_key); ?>" value="<?php echo esc_attr($price); ?>" />
+                    </p>
+                    <?php
                 }
             }
+            ?>
+            <p><input type="submit" name="wc_city_prices_submit" value="Save Prices" class="button button-primary" /></p>
+        </form>
+    </div>
+    <?php
+}
 
-            return $states;
+// Enqueue city price script and localize city prices
+add_action('wp_enqueue_scripts', 'wc_enqueue_city_price_script');
+function wc_enqueue_city_price_script() {
+    wp_enqueue_script('wc-city-price', plugin_dir_url(__FILE__) . 'js/city-price.js', array('jquery'), '1.0', true);
+
+    // Localize the script with city prices
+    $city_prices = array();
+    global $places;
+    foreach ($places['NG'] as $state_code => $cities) {
+        foreach ($cities as $city) {
+            $price_key = 'wc_city_price_' . $state_code . '_' . sanitize_title($city);
+            $price = get_option($price_key, '');
+            if (!empty($price)) {
+                $city_prices[$state_code][$city] = $price;
+            }
         }
-
-        /**
-	    * Modify billing field
-	    * @param mixed $fields
-	    * @param mixed $country
-	    * @return mixed
-	    */
-        public function wc_billing_fields( $fields, $country ) {
-			$fields['billing_city']['type'] = 'city';
-
-			return $fields;
-		}
-
-		/**
-	    * Modify shipping field
-	    * @param mixed $fields
-	    * @param mixed $country
-	    * @return mixed
-	    */
-		public function wc_shipping_fields( $fields, $country ) {
-			$fields['shipping_city']['type'] = 'city';
-
-			return $fields;
-		}
-
-		/**
-	    * Implement places/city field
-	    * @param mixed $field
-	    * @param string $key
-	    * @param mixed $args
-	    * @param string $value
-	    * @return mixed
-	    */
-		public function wc_form_field_city($field, $key, $args, $value ) {
-			// Do we need a clear div?
-			if ( ( ! empty( $args['clear'] ) ) ) {
-				$after = '<div class="clear"></div>';
-			} else {
-				$after = '';
-			}
-
-			// Required markup
-			if ( $args['required'] ) {
-				$args['class'][] = 'validate-required';
-				$required = ' <abbr class="required" title="' . esc_attr__( 'required', 'woocommerce'  ) . '">*</abbr>';
-			} else {
-				$required = '';
-			}
-
-			// Custom attribute handling
-			$custom_attributes = array();
-
-			if ( ! empty( $args['custom_attributes'] ) && is_array( $args['custom_attributes'] ) ) {
-				foreach ( $args['custom_attributes'] as $attribute => $attribute_value ) {
-					$custom_attributes[] = esc_attr( $attribute ) . '="' . esc_attr( $attribute_value ) . '"';
-				}
-			}
-
-			// Validate classes
-			if ( ! empty( $args['validate'] ) ) {
-				foreach( $args['validate'] as $validate ) {
-					$args['class'][] = 'validate-' . $validate;
-				}
-			}
-
-			// field p and label
-			$field  = '<p class="form-row ' . esc_attr( implode( ' ', $args['class'] ) ) .'" id="' . esc_attr( $args['id'] ) . '_field">';
-			if ( $args['label'] ) {
-				$field .= '<label for="' . esc_attr( $args['id'] ) . '" class="' . esc_attr( implode( ' ', $args['label_class'] ) ) .'">' . $args['label']. $required . '</label>';
-			}
-
-			// Get Country
-			$country_key = $key == 'billing_city' ? 'billing_country' : 'shipping_country';
-			$current_cc  = WC()->checkout->get_value( $country_key );
-
-			$state_key = $key == 'billing_city' ? 'billing_state' : 'shipping_state';
-			$current_sc  = WC()->checkout->get_value( $state_key );
-
-			// Get country places
-			$places = $this->get_places( $current_cc );
-
-			if ( is_array( $places ) ) {
-
-				$field .= '<select name="' . esc_attr( $key ) . '" id="' . esc_attr( $args['id'] ) . '" class="city_select ' . esc_attr( implode( ' ', $args['input_class'] ) ) .'" ' . implode( ' ', $custom_attributes ) . ' placeholder="' . esc_attr( $args['placeholder'] ) . '">';
-
-				$field .= '<option value="">'. __( 'Select an option&hellip;', 'woocommerce' ) .'</option>';
-
-				if ( $current_sc ) {
-					$dropdown_places = $places[ $current_sc ];
-				} else if ( is_array($places) &&  isset($places[0])) {
-					$dropdown_places = array_reduce( $places, 'array_merge', array() );
-					sort( $dropdown_places );
-				} else {
-					$dropdown_places = $places;
-				}
-
-	        	foreach ( $dropdown_places as $city_name ) {
-	        		if(!is_array($city_name)) {
-						$field .= '<option value="' . esc_attr( $city_name ) . '" '.selected( $value, $city_name, false ) . '>' . $city_name .'</option>';
-	        		}
-				}
-
-				$field .= '</select>';
-
-			} else {
-
-				$field .= '<input type="text" class="input-text ' . esc_attr( implode( ' ', $args['input_class'] ) ) .'" value="' . esc_attr( $value ) . '"  placeholder="' . esc_attr( $args['placeholder'] ) . '" name="' . esc_attr( $key ) . '" id="' . esc_attr( $args['id'] ) . '" ' . implode( ' ', $custom_attributes ) . ' />';
-			}
-
-			// field description and close wrapper
-			if ( $args['description'] ) {
-				$field .= '<span class="description">' . esc_attr( $args['description'] ) . '</span>';
-			}
-
-			$field .= '</p>' . $after;
-
-			return $field;
-		}
- 		/**
-	    * Get places
-	    * @param string $p_code(default:)
-	    * @return mixed
-	    */
-		public function get_places( $p_code = null ) {
-			if ( empty( $this->places ) ) {
-				$this->load_country_places();
-			}
-
-			if ( ! is_null( $p_code ) ) {
-				return isset( $this->places[ $p_code ] ) ? $this->places[ $p_code ] : false;
-			} else {
-				return $this->places;
-			}
-		}
-		/**
-	    * Get country places
-	    * @return mixed
-	    */
-		public function load_country_places() {
-			global $places;
-
-			$allowed =  $this->get_store_allowed_countries();
-
-			if ( $allowed ) {
-				foreach ( $allowed as $code => $country ) {
-					if ( ! isset( $places[ $code ] ) && file_exists( $this->get_plugin_path() . '/places/' . $code . '.php' ) ) {
-						include( $this->get_plugin_path() . '/places/' . $code . '.php' );
-					}
-				}
-			}
-
-			$this->places = $places;
-		}
-
-		/**
-	    * Load scripts
-	    */
-		public function load_scripts() {
-			if ( is_cart() || is_checkout() || is_wc_endpoint_url( 'edit-address' ) ) {
-
-				$city_select_path = $this->get_plugin_url() . 'js/place-select.js';
-				wp_enqueue_script( 'wc-city-select', $city_select_path, array( 'jquery', 'woocommerce' ), self::VERSION, true );
-
-				$places = json_encode( $this->get_places() );
-				wp_localize_script( 'wc-city-select', 'wc_city_select_params', array(
-					'cities' => $places,
-					'i18n_select_city_text' => esc_attr__( 'Select an option&hellip;', 'woocommerce' )
-				) );
-			}
-		}
-
-        /**
-        * Get plugin root path
-	    * @return mixed
-        */
-        private function get_plugin_path() {
-            if (isset($this->plugin_path)) {
-				return $this->plugin_path;
-			}
-			$path = $this->plugin_path = plugin_dir_path( __FILE__ );
-
-			return untrailingslashit($path);
-        }
-
-        /**
-        * Get Store allowed countries
-	    * @return mixed
-        */
-        private function get_store_allowed_countries() {
-            return array_merge( WC()->countries->get_allowed_countries(), WC()->countries->get_shipping_countries() );
-        }
-
-        /**
-        * Get plugin url
-	    * @return mixed
-        */
-        public function get_plugin_url() {
-
-			if (isset($this->plugin_url)) {
-				return $this->plugin_url;
-			}
-
-			return $this->plugin_url = plugin_dir_url( __FILE__ );
-		}
     }
-    /**
-    * Instantiate class
-    */
-    $GLOBALS['wc_states_places'] = new WC_States_Places();
-};
+    wp_localize_script('wc-city-price', 'wc_city_prices', $city_prices);
+}
+
+add_action('woocommerce_review_order_after_shipping', 'display_city_price_checkout');
+function display_city_price_checkout() {
+    ?>
+    <div id="city-price-display-checkout"></div>
+    <script type="text/javascript">
+    jQuery(function($) {
+        $('#billing_city').on('change', function() {
+            var city = $(this).val();
+            var state = $('#billing_state').val();
+            if (city && wc_city_prices[state] && wc_city_prices[state][city]) {
+                var price = wc_city_prices[state][city];
+                $('#city-price-display-checkout').html('City Price: ' + price);
+            } else {
+                $('#city-price-display-checkout').html('');
+            }
+        });
+    });
+    </script>
+    <?php
+}
+?>
