@@ -5,7 +5,7 @@
  *
  * @version  1.0.0
  * @license http://opensource.org/licenses/gpl-license.php GNU Public License
- * Credits: https://donjajo.com/ngstateslga-nigerian-36-states-local-government-areas-php-class/
+ * Credits: Bughacker
  */
 global $places;
 
