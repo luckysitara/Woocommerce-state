@@ -113,15 +113,15 @@ class Custom_Shipping_Plugin {
 
         // Define shipping prices
         $shipping_prices = get_option('custom_shipping_prices', array());
-        $default_price = isset($shipping_prices['default']) ? $shipping_prices['default'] : 0;
+        $state_prices = isset($shipping_prices['states']) ? $shipping_prices['states'] : array();
         $lagos_cities_prices = isset($shipping_prices['lagos']) ? $shipping_prices['lagos'] : array();
 
-        $shipping_cost = $default_price;
+        $shipping_cost = 0;
 
         if ($selected_state == 'LAG' && isset($lagos_cities_prices[$selected_city])) {
             $shipping_cost = $lagos_cities_prices[$selected_city];
-        } elseif (isset($shipping_prices[$selected_state])) {
-            $shipping_cost = $shipping_prices[$selected_state];
+        } elseif (isset($state_prices[$selected_state])) {
+            $shipping_cost = $state_prices[$selected_state];
         }
 
         $woocommerce->cart->add_fee(__('Shipping', 'woocommerce'), $shipping_cost);
@@ -163,9 +163,9 @@ class Custom_Shipping_Plugin {
         );
 
         add_settings_field(
-            'default_shipping_price',
-            __('Default Shipping Price', 'woocommerce'),
-            array($this, 'default_shipping_price_field'),
+            'states_shipping_prices',
+            __('State Shipping Prices', 'woocommerce'),
+            array($this, 'states_shipping_prices_field'),
             'custom-shipping-settings',
             'custom_shipping_settings_section'
         );
@@ -179,10 +179,53 @@ class Custom_Shipping_Plugin {
         );
     }
 
-    public function default_shipping_price_field() {
+    public function states_shipping_prices_field() {
         $shipping_prices = get_option('custom_shipping_prices', array());
-        $default_price = isset($shipping_prices['default']) ? $shipping_prices['default'] : '';
-        echo '<input type="number" name="custom_shipping_prices[default]" value="' . esc_attr($default_price) . '" class="regular-text">';
+        $state_prices = isset($shipping_prices['states']) ? $shipping_prices['states'] : array();
+
+        $states = array(
+            'AB' => 'Abia',
+            'AD' => 'Adamawa',
+            'AK' => 'Akwa Ibom',
+            'AN' => 'Anambra',
+            'BA' => 'Bauchi',
+            'BY' => 'Bayelsa',
+            'BE' => 'Benue',
+            'BO' => 'Borno',
+            'CR' => 'Cross River',
+            'DE' => 'Delta',
+            'EB' => 'Ebonyi',
+            'ED' => 'Edo',
+            'EK' => 'Ekiti',
+            'EN' => 'Enugu',
+            'GO' => 'Gombe',
+            'IM' => 'Imo',
+            'JI' => 'Jigawa',
+            'KD' => 'Kaduna',
+            'KN' => 'Kano',
+            'KT' => 'Katsina',
+            'KE' => 'Kebbi',
+            'KO' => 'Kogi',
+            'KW' => 'Kwara',
+            'LA' => 'Lagos',
+            'NA' => 'Nasarawa',
+            'NI' => 'Niger',
+            'OG' => 'Ogun',
+            'ON' => 'Ondo',
+            'OS' => 'Osun',
+            'OY' => 'Oyo',
+            'PL' => 'Plateau',
+            'RI' => 'Rivers',
+            'SO' => 'Sokoto',
+            'TA' => 'Taraba',
+            'YO' => 'Yobe',
+            'ZA' => 'Zamfara'
+        );
+
+        foreach ($states as $state_code => $state_name) {
+            $price = isset($state_prices[$state_code]) ? $state_prices[$state_code] : '';
+            echo '<label>' . $state_name . ':</label> <input type="number" name="custom_shipping_prices[states][' . $state_code . ']" value="' . esc_attr($price) . '" class="regular-text"><br>';
+        }
     }
 
     public function lagos_shipping_prices_field() {
