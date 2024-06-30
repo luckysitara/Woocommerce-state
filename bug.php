@@ -40,7 +40,7 @@ class Custom_Shipping_Plugin {
     public function get_city_options() {
         // Get selected state
         $selected_state = WC()->customer->get_billing_state();
-        
+
         // Define cities based on the selected state
         $cities = array(
             '' => __('Select a city', 'woocommerce')
